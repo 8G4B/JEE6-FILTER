@@ -2,6 +2,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 MODEL_NAME = "kdyeon0309/gogo_forpanity_filter"
+TOKENIZER_NAME = "monologg/koelectra-base-v3-discriminator"
 
 _tokenizer = None
 _model = None
@@ -9,7 +10,7 @@ _model = None
 
 def load_model():
     global _tokenizer, _model
-    _tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    _tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
     _model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
     _model.eval()
 
@@ -24,7 +25,9 @@ def predict(text: str) -> dict:
     pred = probs.argmax(dim=-1).item()
     confidence = probs[0][pred].item()
 
+    # 3-class: 0=clean, 1=mild profanity, 2=severe profanity
     return {
-        "is_profanity": pred == 1,
+        "is_profanity": pred >= 1,
+        "label": pred,
         "confidence": round(confidence, 4),
     }
