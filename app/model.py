@@ -2,7 +2,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 MODEL_NAME = "kdyeon0309/gogo_forpanity_filter"
-TOKENIZER_NAME = "monologg/koelectra-base-v3-discriminator"
+TOKENIZER_NAME = "beomi/KcELECTRA-base"
 
 _tokenizer = None
 _model = None
