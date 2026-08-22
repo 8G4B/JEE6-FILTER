@@ -15,6 +15,11 @@ REQUEST_DURATION = Histogram(
     ("method", "route"),
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
 )
+INFERENCE_DURATION = Histogram(
+    "jee6_filter_inference_duration_seconds",
+    "Profanity model inference duration including executor queueing.",
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
+)
 
 metrics_app = make_asgi_app()
 

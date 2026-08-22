@@ -30,7 +30,7 @@ def load_model():
 def predict(text: str) -> dict:
     inputs = _tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
 
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = _model(**inputs)
 
     probs = torch.softmax(outputs.logits, dim=-1)

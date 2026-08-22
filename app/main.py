@@ -1,8 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, BackgroundTasks
-from app.model import load_model, predict
+
 from app.feedback import save_feedback, feedback_count
+from app.inference import initialize_inference, predict_async, shutdown_inference
 from app.metrics import metrics_app, observe_request
 
 logger = logging.getLogger(__name__)
@@ -10,9 +12,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    load_model()
-    logger.info("Profanity filter model loaded")
-    yield
+    initialize_inference()
+    logger.info("Profanity filter model loaded and warmed")
+    try:
+        yield
+    finally:
+        shutdown_inference()
 
 
 app = FastAPI(title="JEE6 Profanity Filter", lifespan=lifespan)
@@ -30,7 +35,7 @@ async def predict_profanity(body: dict):
     text = body.get("text", "")
     if not text:
         return {"is_profanity": False, "confidence": 0.0}
-    return predict(text)
+    return await predict_async(text)
 
 
 @app.post("/feedback")
@@ -59,6 +64,7 @@ async def train_model(background_tasks: BackgroundTasks):
 async def model_status():
     import os
     from app.model import FINE_TUNED_DIR
+
     return {
         "fine_tuned": os.path.exists(FINE_TUNED_DIR),
         "feedback_count": feedback_count(),
