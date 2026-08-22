@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -44,15 +45,15 @@ async def add_feedback(body: dict):
     label = body.get("label", 0)
     if not text:
         return {"status": "error", "message": "text is required"}
-    save_feedback(text, label)
-    return {"status": "ok", "total_feedback": feedback_count()}
+    total = await asyncio.to_thread(save_feedback, text, label)
+    return {"status": "ok", "total_feedback": total}
 
 
 @app.post("/train")
 async def train_model(background_tasks: BackgroundTasks):
     from app.trainer import train
 
-    count = feedback_count()
+    count = await asyncio.to_thread(feedback_count)
     if count < 5:
         return {"status": "skip", "message": f"피드백 {count}개 — 최소 5개 필요"}
 
@@ -67,5 +68,5 @@ async def model_status():
 
     return {
         "fine_tuned": os.path.exists(FINE_TUNED_DIR),
-        "feedback_count": feedback_count(),
+        "feedback_count": await asyncio.to_thread(feedback_count),
     }
