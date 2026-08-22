@@ -5,3 +5,4 @@ numpy<2.0
 torch==2.5.0+cpu
 transformers==4.46.0
 safetensors==0.4.5
+prometheus-client==0.21.0

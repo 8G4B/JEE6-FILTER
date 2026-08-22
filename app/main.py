@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, BackgroundTasks
 from app.model import load_model, predict
 from app.feedback import save_feedback, feedback_count
+from app.metrics import metrics_app, observe_request
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="JEE6 Profanity Filter", lifespan=lifespan)
+app.middleware("http")(observe_request)
+app.mount("/metrics", metrics_app)
 
 
 @app.get("/health")
