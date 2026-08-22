@@ -1,20 +1,29 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, BackgroundTasks
-from app.model import load_model, predict
+
 from app.feedback import save_feedback, feedback_count
+from app.inference import initialize_inference, predict_async, shutdown_inference
+from app.metrics import metrics_app, observe_request
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    load_model()
-    logger.info("Profanity filter model loaded")
-    yield
+    initialize_inference()
+    logger.info("Profanity filter model loaded and warmed")
+    try:
+        yield
+    finally:
+        shutdown_inference()
 
 
 app = FastAPI(title="JEE6 Profanity Filter", lifespan=lifespan)
+app.middleware("http")(observe_request)
+app.mount("/metrics", metrics_app)
 
 
 @app.get("/health")
@@ -27,7 +36,7 @@ async def predict_profanity(body: dict):
     text = body.get("text", "")
     if not text:
         return {"is_profanity": False, "confidence": 0.0}
-    return predict(text)
+    return await predict_async(text)
 
 
 @app.post("/feedback")
@@ -36,27 +45,33 @@ async def add_feedback(body: dict):
     label = body.get("label", 0)
     if not text:
         return {"status": "error", "message": "text is required"}
-    save_feedback(text, label)
-    return {"status": "ok", "total_feedback": feedback_count()}
+    total = await asyncio.to_thread(save_feedback, text, label)
+    return {"status": "ok", "total_feedback": total}
 
 
 @app.post("/train")
 async def train_model(background_tasks: BackgroundTasks):
-    from app.trainer import train
+    from app.trainer import claim_training, train
 
-    count = feedback_count()
+    count = await asyncio.to_thread(feedback_count)
     if count < 5:
         return {"status": "skip", "message": f"피드백 {count}개 — 최소 5개 필요"}
+    if not claim_training():
+        return {"status": "skip", "message": "이미 학습 중입니다."}
 
-    background_tasks.add_task(train)
+    background_tasks.add_task(train, claimed=True)
     return {"status": "training", "samples": count}
 
 
 @app.get("/status")
 async def model_status():
     import os
+
     from app.model import FINE_TUNED_DIR
+    from app.trainer import is_training
+
     return {
         "fine_tuned": os.path.exists(FINE_TUNED_DIR),
-        "feedback_count": feedback_count(),
+        "training": is_training(),
+        "feedback_count": await asyncio.to_thread(feedback_count),
     }
