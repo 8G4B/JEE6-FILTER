@@ -1,16 +1,47 @@
 import logging
+import threading
+
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoModelForSequenceClassification
 
-from app.feedback import load_feedback, FEEDBACK_FILE
-from app.model import TOKENIZER_NAME, BASE_MODEL_NAME, FINE_TUNED_DIR, load_model, get_model_and_tokenizer
+from app.feedback import load_feedback
+from app.model import (
+    BASE_MODEL_NAME,
+    FINE_TUNED_DIR,
+    load_model,
+    get_model_and_tokenizer,
+)
 
 logger = logging.getLogger(__name__)
 
 EPOCHS = 3
 BATCH_SIZE = 8
 LR = 2e-5
+_training_lock = threading.Lock()
+_training = False
+
+
+def claim_training() -> bool:
+    global _training
+
+    with _training_lock:
+        if _training:
+            return False
+        _training = True
+        return True
+
+
+def is_training() -> bool:
+    with _training_lock:
+        return _training
+
+
+def _finish_training() -> None:
+    global _training
+
+    with _training_lock:
+        _training = False
 
 
 class FeedbackDataset(Dataset):
@@ -31,10 +62,23 @@ class FeedbackDataset(Dataset):
         }
 
 
-def train() -> dict:
+def train(*, claimed: bool = False) -> dict:
+    if not claimed and not claim_training():
+        return {"status": "skip", "message": "이미 학습 중입니다."}
+
+    try:
+        return _train()
+    finally:
+        _finish_training()
+
+
+def _train() -> dict:
     feedback = load_feedback()
     if len(feedback) < 5:
-        return {"status": "skip", "message": f"피드백 {len(feedback)}개 — 최소 5개 필요"}
+        return {
+            "status": "skip",
+            "message": f"피드백 {len(feedback)}개 — 최소 5개 필요",
+        }
 
     texts = [f["text"] for f in feedback]
     labels = [f["label"] for f in feedback]

@@ -51,22 +51,27 @@ async def add_feedback(body: dict):
 
 @app.post("/train")
 async def train_model(background_tasks: BackgroundTasks):
-    from app.trainer import train
+    from app.trainer import claim_training, train
 
     count = await asyncio.to_thread(feedback_count)
     if count < 5:
         return {"status": "skip", "message": f"피드백 {count}개 — 최소 5개 필요"}
+    if not claim_training():
+        return {"status": "skip", "message": "이미 학습 중입니다."}
 
-    background_tasks.add_task(train)
+    background_tasks.add_task(train, claimed=True)
     return {"status": "training", "samples": count}
 
 
 @app.get("/status")
 async def model_status():
     import os
+
     from app.model import FINE_TUNED_DIR
+    from app.trainer import is_training
 
     return {
         "fine_tuned": os.path.exists(FINE_TUNED_DIR),
+        "training": is_training(),
         "feedback_count": await asyncio.to_thread(feedback_count),
     }
